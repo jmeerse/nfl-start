@@ -1,0 +1,96 @@
+---
+title: "nfl start"
+author: "JMeerse"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(nflfastR)
+library(ggimage)
+
+```
+
+```{r}
+pbp22 <- load_pbp(2021)
+
+#which team passed the most on 3rd down (outside of last 2 mins, game still in play)?
+kc <- pbp22 %>%
+  filter(wp > .20 & wp < .80 & down == 3 & half_seconds_remaining > 120) %>%
+  group_by(posteam) %>%
+  summarize(mean_pass = mean(pass), 
+            plays = n()) %>%
+  arrange(mean_pass)
+
+
+#basic graph
+ggplot(kc, aes(x = reorder(posteam,-mean_pass), 
+               y = mean_pass)) + 
+  geom_text(aes(label = posteam))
+
+#does 3rd down passing depend on yards to go?
+ytg <- pbp22 %>%
+  filter(wp > .20 & wp < .80 & down == 3 & half_seconds_remaining > 120) %>%
+  group_by(posteam) %>%
+  summarize(mean_ytg = mean(ydstogo), 
+            plays = n()) %>%
+  arrange(mean_ytg)
+
+#add ytg to kc
+kc <- left_join(kc, ytg, by = "posteam")
+
+#let's graph ytg vs pass%
+p1 <- kc %>% ggplot(aes(x = mean_ytg, y = mean_pass)) +
+  geom_text(aes(label = posteam))
+
+#playing with themes, and adding labels
+p1 + theme_bw()
+p1 + theme_minimal()
+p1 + theme_classic()
+p1 + theme_void()
+
+#ave ytg on 3rd down vs ave yards gained on passing on 3rd down
+gained <- pbp22 %>%
+  filter(wp > .20 & wp < .80 & down == 3 & half_seconds_remaining > 120 & pass == 1) %>%
+  group_by(posteam) %>%
+  summarize(mean_gain = mean(yards_gained, na.rm = TRUE), 
+            plays = n()) %>%
+  arrange(mean_gain)
+
+#graph of mean_gain
+ggplot(gained, aes(x = reorder(posteam,-mean_gain), 
+               y = mean_gain)) + 
+  geom_text(aes(label = posteam))
+
+kc <- left_join(kc, gained, by = "posteam")
+
+p2 <- kc %>% ggplot(aes(x = mean_ytg, y = mean_gain)) +
+  geom_text(aes(label = posteam))
+
+p2
+
+#add y = x
+p2 + geom_abline(slope = 1, intercept = 0)
+
+#let's get helmets!
+kc  <- left_join(kc, teams_colors_logos, by = c("posteam" = "team_abbr"))
+
+p3 <- kc %>% ggplot(aes(x = mean_ytg, y = mean_gain)) +
+  geom_image(aes(image = team_logo_espn), 
+             size = 0.05, by = "width",
+             position = position_jitter(width = .075, height = .075)) +
+  geom_abline(slope = 1, intercept = 0)
+
+p3
+
+#making nice labels
+p4 <- p3 + labs(title = "3rd Down Passing, 2022, Yards to Go vs Yards Gained",
+          subtitle = "Win Probability between 20% and 80%, excluding the last 2 mins of a half",
+          caption = "@jmeerse  data: nflfastR",
+          x = "Mean Yards to Go",
+          y = "Mean Yards Gained by Passing")
+
+
+```
