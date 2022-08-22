@@ -12,6 +12,9 @@ library(nflfastR)
 library(ggimage)
 
 ```
+#R markdown
+This will introduce using RStudio for analyzing NFL data.  Specifically, we'll look at the 2021 season (started in Sept 2021, ended in Feb 2022).
+
 #data and 3rd down passing
 ```{r}
 pbp22 <- load_pbp(2021)
