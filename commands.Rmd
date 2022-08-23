@@ -13,7 +13,9 @@ library(ggimage)
 
 ```
 #R markdown
-This will introduce using RStudio for analyzing NFL data.  Specifically, we'll look at the 2021 season (started in Sept 2021, ended in Feb 2022).
+This will introduce using RStudio for analyzing NFL data./
+
+Specifically, we'll look at the 2021 season (started in Sept 2021, ended in Feb 2022).
 
 #data and 3rd down passing
 ```{r}
@@ -117,5 +119,82 @@ kc <- left_join(kc, epa3, by = "posteam")
 
 kc %>% ggplot(aes(x = mean_gain, y = mean_epa, color = mean_ytg)) +
   geom_text(aes(label = posteam))
+
+```
+
+
+```{r what is EPA?}
+first_down_run <- pbp22 %>% 
+  filter(down == 1, play_type == "run")
+
+first_down_run %>% ggplot(aes(x = epa)) + geom_histogram()
+
+summary(first_down_run$epa)
+
+#lets just group by down - ave epa 
+all_plays_epa <- pbp22 %>% filter(play_type == "run" | play_type == "pass") %>%   group_by(down, play_type) %>% summarise(mean_epa_all = mean(epa, na.rm = TRUE)) %>% ungroup()
+#turnovers have a big effect - let's remove them and see the difference
+
+
+pbp22 %>% filter(play_type == "run" | play_type == "pass") %>%
+  ggplot(aes(x = epa, y = down, group = down)) + geom_boxplot() + facet_wrap(~ play_type)
+
+pbp22 %>% filter(play_type == "run" | play_type == "pass", turnover == 0) %>%
+  ggplot(aes(x = epa, y = down, group = down)) + geom_boxplot() + facet_wrap(~ play_type)
+
+#make a variable indicating turnover on the play
+pbp22 <- pbp22 %>% mutate(turnover = if_else(fumble_lost == 1 | interception == 1, 1, 0))
+
+#look at mean epa without turnovers
+epa_no_turnovers <- pbp22 %>% filter(play_type == "run" | play_type == "pass", turnover == 0) %>%   group_by(down, play_type) %>% summarise(mean_epa_no = mean(epa, na.rm = TRUE))
+
+epa_down <- cbind(all_plays_epa, epa_no_turnovers) #this is bad, because it duplicates column names
+
+# Find Duplicate Column Names
+duplicated_names <- duplicated(colnames(epa_down))
+
+# Remove Duplicate Column Names
+epa_down <- epa_down[!duplicated_names]
+
+#what does a turnover cost, on average?
+epa_down$diff = epa_down$mean_epa_no - epa_down$mean_epa_all
+
+#how to graph this?
+epa_down %>% ggplot(aes(x = mean_epa_all, y = mean_epa_no)) + geom_point() 
+
+# how does yards gained relate to epa?
+pbp22 %>% filter(play_type == "run", fumble == 0) %>% 
+  ggplot(aes(x = yards_gained, y = epa)) + 
+  geom_point() + facet_wrap(~ down)
+
+big_minus_epa <- pbp22 %>% filter(epa < -10) #plays that lost lots of epa - all were turnovers returned for TDs
+```
+
+```{r epa and winning}
+reg22 <- pbp22 %>% filter(season_type == "REG")
+
+epa_win <- reg22 %>% group_by(posteam, game_id) %>% 
+  summarise(tot_epa = sum(epa, na.rm = TRUE),
+            result = mean(result),
+            home = last(home_team),
+            away = last(away_team),
+            week = last(week)) %>% 
+  ungroup()
+    
+epa_win <- epa_win %>% 
+  mutate(win_loss = case_when(
+    (posteam == home) & result > 0 ~ "win",
+    (posteam != home) & result < 0 ~ "win",
+    TRUE ~ "loss"
+    )
+  )
+ 
+                            
+epa_win %>% ggplot(aes(x = week, 
+                       y = tot_epa, 
+                       group = posteam)) + 
+  geom_line() + 
+  geom_point(aes(color = win_loss)) +
+  facet_wrap(~ posteam) 
 
 ```
